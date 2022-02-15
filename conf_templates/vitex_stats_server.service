@@ -1,0 +1,14 @@
+[Unit]
+Description=uWSGI instance to serve myproject
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/vitex_stats_backend/workspace
+Environment="PATH=/home/ubuntu/vitex_stats_backend/pyenv/bin"
+Environment="FLASK_CONFIG=/home/ubuntu/vitex_stats_backend/prod_config.py"
+ExecStart=/home/ubuntu/vitex_stats_backend/pyenv/bin/uwsgi --ini vitex_stats_server.ini
+
+[Install]
+WantedBy=multi-user.target
