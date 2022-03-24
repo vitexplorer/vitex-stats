@@ -1,7 +1,10 @@
 from datetime import date, timedelta
 
 from sqlalchemy.sql.functions import func
-from ..models import db, StatisticDaily, StatisticDailySchema, AccountBlock
+from sqlalchemy.orm.exc import NoResultFound
+from ..models import SBPActivity, db, StatisticDaily, StatisticDailySchema, AccountBlock
+
+from flask import current_app as app
 
 statistic_daily_schema = StatisticDailySchema()
 
@@ -34,3 +37,19 @@ def save_statistic_daily(statistic_daily: StatisticDaily, override=False):
         db.session.add(statistic_daily)
 
     db.session.commit()
+
+
+def update_sbp_activity(producer_address, last_timestamp):
+    try:
+        sbp_activity = db.session.query(
+            SBPActivity).filter_by(block_producing_address=producer_address).one()
+        sbp_activity.last_timestamp = last_timestamp
+        db.session.commit()
+    except NoResultFound:
+        sbp_activity = SBPActivity(
+            block_producing_address=producer_address, last_timestamp=last_timestamp)
+        db.session.add(sbp_activity)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f'Error when update sbp activity: {e}')

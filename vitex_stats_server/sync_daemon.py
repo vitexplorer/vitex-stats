@@ -8,6 +8,8 @@ import requests
 from flask import current_app as app
 from sqlalchemy.exc import SQLAlchemyError, NoResultFound
 
+from vitex_stats_server.statistic.data_accessor import update_sbp_activity
+
 from .ledger.data_accessor import gvite_get_account, gvite_get_account_block_by_hash, gvite_get_snapshot_block, save_account_block_from_dict, save_account_from_dict, save_snapshot_block_dict
 from vitex_stats_server.models import Account,  db
 
@@ -59,6 +61,8 @@ def sync_loop():
 
         timestamp_now = int(datetime.now().timestamp())
 
+        account_addresses_to_update = []
+
         for change in account_block_changes:
             account_block_hash = change['hash']
             account_block = gvite_get_account_block_by_hash(
@@ -82,8 +86,19 @@ def sync_loop():
 
             save_account_block_from_dict(account_block, timestamp_now)
             logging.info(f'saved account block {account_block_hash}')
+            if account_block['accountAddress'] not in account_addresses_to_update:
+                account_addresses_to_update.append(
+                    account_block['accountAddress'])
+            if account_block['toAddress'] not in account_addresses_to_update:
+                account_addresses_to_update.append(
+                    account_block['toAddress'])
+            if account_block['fromAddress'] not in account_addresses_to_update:
+                account_addresses_to_update.append(
+                    account_block['fromAddress'])
 
-            update_account_last_transaction_date(account_block, timestamp_now)
+        for account_address in account_addresses_to_update:
+            update_account_balance_and_timestamp(
+                account_address, timestamp_now)
 
         err, snapshot_block_changes = get_snapshot_block_changes(
             snapshot_block_filter)
@@ -92,6 +107,8 @@ def sync_loop():
             if snapshot_block_filter == '':
                 logging.error('register snapshot block filter failed')
                 continue
+
+        producer_addresses_to_update = []
 
         for change in snapshot_block_changes:
             snapshot_block_height = change['height']
@@ -102,6 +119,11 @@ def sync_loop():
                 continue
             save_snapshot_block_dict(snapshot_block)
             logging.info(f'saved snapshot block {snapshot_block_height}')
+            if snapshot_block['producer'] not in producer_addresses_to_update:
+                producer_addresses_to_update.append(
+                    snapshot_block['producer'])
+        for producer_address in producer_addresses_to_update:
+            touch_sbp_activity(producer_address, timestamp_now)
 
 
 def register_account_block_filter():
@@ -195,6 +217,19 @@ def update_account_last_transaction_date(account_block, default_timestamp=0):
     return account
 
 
+def update_account_balance_and_timestamp(account_address, timestamp):
+    if account_address == '':
+        return
+
+    new_datetime = datetime.fromtimestamp(timestamp)
+
+    account_dict = gvite_get_account(account_address)
+    account_dict.update({'lastTransactionDate': new_datetime})
+    if account_dict is None:
+        logging.error(f'account {account_address} not found')
+    save_account_from_dict(account_dict)
+
+
 def register_snapshot_block_filter():
     headers = {'content-type': 'application/json'}
     request_body = {
@@ -252,3 +287,7 @@ def get_snapshot_block_changes(filter_id):
         snapshot_block_changes = []
 
     return None, snapshot_block_changes
+
+
+def touch_sbp_activity(producer_address, timestamp):
+    update_sbp_activity(producer_address, timestamp)

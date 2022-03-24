@@ -612,6 +612,10 @@ def save_account_from_dict(src):
         stake_amount=src.get('stakeAmount', 0),
         vite_balance=vite_balance
     )
+    last_transaction_date = src.get('lastTransactionDate', None)
+    if last_transaction_date:
+        account.last_transaction_date = last_transaction_date
+
     try:
         existing_account = db.session.query(Account).get(address)
     except PendingRollbackError as err:
@@ -662,9 +666,10 @@ def save_account_from_dict(src):
         except NoResultFound:
             db.session.add(balance)
         else:
-            app.logger.info(
-                f'balance {address} - {token_id} already exists, updating')
-            db.session.merge(balance)
+            if str(balance.balance) == str(existing_account_block.balance):
+                continue
+            else:
+                db.session.merge(balance)
         finally:
             try:
                 db.session.commit()
@@ -718,8 +723,12 @@ def db_get_accounts(order='desc', sort_field='viteBalance', page_idx=0, page_siz
 
     sort_criteria = get_sort_criteria_account(order, sort_field)
 
-    accounts = db.session.query(Account).order_by(
-        sort_criteria).offset(offset).limit(page_size)
+    if sort_field == 'lastTransactionDate':
+        accounts = db.session.query(Account).filter(Account.last_transaction_date.isnot(None)).order_by(sort_criteria).offset(
+            offset).limit(page_size)
+    else:
+        accounts = db.session.query(Account).order_by(
+            sort_criteria).offset(offset).limit(page_size)
 
     count = accounts.count()
     if count >= page_size:

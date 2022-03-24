@@ -1,6 +1,6 @@
 from vitex_stats_server.models import SBPSchema, TokenSchema
 from flask import request, jsonify, Blueprint
-from .data_accessor import da_get_active_sbp, get_sbp_detail_da, get_sbp_list_da, get_token_info_list_da, get_token_info_by_Id, gvite_get_contract_info, gvite_get_voted_sbp, search_token_name_da
+from .data_accessor import da_get_active_sbp_v3, get_sbp_detail_da, get_sbp_list_da, get_token_info_list_da, get_token_info_by_Id, gvite_get_contract_info, gvite_get_voted_sbp, search_token_name_da
 
 bp_contract = Blueprint('contract', __name__, url_prefix='/contract')
 
@@ -92,7 +92,8 @@ def get_token_info(token_id):
 
 @bp_contract.route('/get_active_sbp/<count>', methods=['GET'])
 def get_active_sbp(count):
-    sbps = da_get_active_sbp(count)
+    count = int(count)
+    sbps = da_get_active_sbp_v3(count)
     result = sbp_schema.dump(sbps, many=True)
 
     return jsonify(result)

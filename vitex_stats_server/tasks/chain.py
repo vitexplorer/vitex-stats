@@ -3,7 +3,7 @@ import logging
 from sqlalchemy.orm.session import make_transient
 from vitex_stats_server.ledger.data_accessor import gvite_get_account, gvite_get_account_block_by_hash, gvite_get_snapshot_block, gvite_get_chunks, save_account_block_from_dict, save_account_from_dict, save_snapshot_block_dict
 from vitex_stats_server.models import Account, SBPSchema, db, Token, TokenSchema
-from vitex_stats_server.contract.data_accessor import get_sbp_reward_gvite, get_token_info_list_da, get_token_info_list_gvite, gvite_get_account_quota, save_sbp_reward
+from vitex_stats_server.contract.data_accessor import db_delete_sbp, db_get_all_sbp, get_sbp_reward_gvite, get_token_info_list_da, get_token_info_list_gvite, gvite_get_account_quota, save_sbp_reward
 from vitex_stats_server.contract.data_accessor import db_save_sbp,  get_sbp_gvite, get_sbp_list_gvite
 from sqlalchemy.exc import SQLAlchemyError, NoResultFound
 
@@ -146,6 +146,13 @@ def refresh_sbp_list():
         sbp.votes = sbp_item.get('votes', 0)
         sbp.rank = sbp_item.get('rank', 0)
         db_save_sbp(sbp)
+    # remove outdated SBP
+    sbp_names = [sbp['sbpName'] for sbp in sbp_list]
+    all_sbps = db_get_all_sbp()
+    for sbp in all_sbps:
+        if sbp.name not in sbp_names:
+            db_delete_sbp(sbp.name)
+
     logging.info('done refreshing SBP list')
 
 
@@ -237,3 +244,15 @@ def update_sbp_reward(timestamp: int):
 
 def update_daily_statistics(target_date: date):
     return get_statistic_daily_by_date(target_date, refresh=True)
+
+
+def refresh_top_holders(top_n: int = 100):
+    top_holders = db.session.query(Account).order_by(
+        Account.vite_balance.desc()).limit(top_n).all()
+    for i, holder in enumerate(top_holders):
+        account_dict = gvite_get_account(holder.address)
+        if account_dict is None:
+            logging.error(f'account {holder.address} not found')
+            continue
+        save_account_from_dict(account_dict)
+        logging.info(f'updated account #{i}: {holder.address}')

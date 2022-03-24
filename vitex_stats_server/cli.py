@@ -158,6 +158,16 @@ def update_sbp_reward(date_str):
     print(f'done updating SBP Reward for {target_date}')
 
 
+@bp_cli.cli.command('update-sbp-reward-yesterday')
+def update_sbp_reward():
+    target_date = datetime.now() - timedelta(days=1)
+    timestamp = target_date.timestamp()
+    from .tasks.chain import update_sbp_reward
+    print(f'update SBP Reward for {target_date}')
+    update_sbp_reward(timestamp)
+    print(f'done updating SBP Reward for {target_date}')
+
+
 @bp_cli.cli.command('update-daily-statistics')
 @click.argument('datestr', required=True)
 def update_daily_stats(datestr):
@@ -248,3 +258,35 @@ def clean_db_after_date(days_before):
         f'Cleaning transactions and snapshots after {target_date} ({days_before} days before today)')
     from .db_manage import delete_account_block_after_date
     delete_account_block_after_date(target_date)
+
+
+@bp_cli.cli.command('update-top-holders')
+@click.argument('top_n', required=True)
+def update_top_holders(top_n):
+    top_n = int(top_n)
+    print(f'Updating top {top_n} holders')
+    from .tasks.chain import refresh_top_holders
+    refresh_top_holders(top_n)
+    print(f'Done updating top {top_n} holders')
+
+
+@bp_cli.cli.command('create-index-snapshot-timestamp')
+def create_index_snapshot_timestamp():
+    print(f'create index on snapshot timestamp')
+    from sqlalchemy import Index
+    from .models import SnapshotBlock
+    idx_timestamp_snapshot = Index(
+        'ix_snapshot_timestamp', SnapshotBlock.timestamp.desc().nullslast())
+    idx_timestamp_snapshot.create(bind=db.engine)
+    print(f'Done creating index on snapshot timestamp')
+
+
+@bp_cli.cli.command('create-index-sbp-block-producing-address')
+def create_index_snapshot_timestamp():
+    print(f'create index on SBP block producing address')
+    from sqlalchemy import Index
+    from .models import SBP
+    idx_sbp_block_producing_address = Index(
+        'ix_sbp_block_producing_address', SBP.block_producing_address.asc().nullslast())
+    idx_sbp_block_producing_address.create(bind=db.engine)
+    print(f'Done creating index on SBP block producing address')

@@ -164,7 +164,7 @@ class SBPRewardSchema(Schema):
 class SBP(db.Model):
     name = db.Column('name', db.String(length=64), primary_key=True)
     block_producing_address = db.Column(
-        'block_producing_address', db.String(length=64))
+        'block_producing_address', db.String(length=64), index=True, unique=True)
     stake_address = db.Column('stake_address', db.String(length=64))
     stake_amount = db.Column('stake_amount', db.DECIMAL(64, 0))
     expiration_height = db.Column('expiration_height', db.Integer)
@@ -173,7 +173,7 @@ class SBP(db.Model):
     votes = db.Column('votes', db.DECIMAL(64, 0))
     rank = db.Column('rank', db.Integer, nullable=True)
 
-    reward = relationship("SBPReward", uselist=False)
+    reward = relationship("SBPReward", uselist=False, cascade="all, delete")
 
 
 class SBPSchema(Schema):
@@ -196,6 +196,13 @@ class SBPSchema(Schema):
     @post_load
     def make_sbp(self, data, **kwargs):
         return SBP(**data)
+
+
+class SBPActivity(db.Model):
+    block_producing_address = db.Column(db.String(length=64), primary_key=True)
+    last_timestamp = db.Column('last_timestamp', db.Integer)
+    last_modified = db.Column('last_modified', db.DateTime, server_default=func.now(
+    ), onupdate=func.current_timestamp(), index=True)
 
 
 class Balance(db.Model):
@@ -287,7 +294,7 @@ class SnapshotBlock(db.Model):
     public_key = db.Column('public_key', db.String)
     signature = db.Column('signature', db.String)
     version = db.Column('version', db.Integer)
-    timestamp = db.Column('timestamp', db.Integer)
+    timestamp = db.Column('timestamp', db.Integer, index=True)
     snapshot_data = relationship('SnapshotData')
 
 

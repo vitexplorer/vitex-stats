@@ -3,7 +3,7 @@ from marshmallow import ValidationError
 import requests
 
 from sqlalchemy.exc import SQLAlchemyError, NoResultFound
-from ..models import SBP, SBPReward, SBPRewardSchema, SBPSchema, SnapshotBlock, Token, TokenSchema, db
+from ..models import SBP, SBPActivity, SBPReward, SBPRewardSchema, SBPSchema, SnapshotBlock, Token, TokenSchema, db
 
 sbp_schema = SBPSchema()
 sbp_reward_schema = SBPRewardSchema()
@@ -130,6 +130,29 @@ def db_save_sbp(sbp):
             db.session.rollback()
             app.logger.error(
                 f'fail to commit SBP {sbp.name}: General Error {err}')
+
+
+def db_get_all_sbp():
+    sbps = db.session.query(SBP).all()
+    return sbps
+
+
+def db_delete_sbp(sbp_name):
+    try:
+        sbp = db.session.query(SBP).get(sbp_name)
+        db.session.delete(sbp)
+        db.session.commit()
+        app.logger.info(
+            f'SBP {sbp_name} deleted')
+    except SQLAlchemyError as err:
+        db.session.rollback()
+        app.logger.error(
+            f'fail to delete SBP {sbp_name}: SQLAlchemyError {err}')
+
+    except Exception as err:
+        db.session.rollback()
+        app.logger.error(
+            f'fail to delete SBP {sbp_name}: General Error {err}')
 
 
 def get_sbp_reward_gvite(timestamp):
@@ -294,13 +317,43 @@ def get_token_info_by_Id(id):
 def da_get_active_sbp(count):
     try:
         snapshot_blocks = db.session.query(SnapshotBlock).order_by(
-            SnapshotBlock.height.desc()).limit(100).all()
+            SnapshotBlock.timestamp.desc()).limit(100).all()
         producer_adresses = [sb.producer for sb in snapshot_blocks]
         producers = db.session.query(SBP).filter(
             SBP.block_producing_address.in_(producer_adresses)).filter(SBP.votes > 0).limit(count)
     except NoResultFound:
         app.logger.error(f'cannot find {count} active SBPs')
         return None
+    return producers
+
+
+def da_get_active_sbp_v2(count):
+    try:
+        snapshot_blocks = db.session.query(SnapshotBlock).order_by(
+            SnapshotBlock.timestamp.desc()).limit(count + 50).all()
+        producer_adresses = []
+        for sb in snapshot_blocks:
+            if len(producer_adresses) >= count:
+                break
+            if sb.producer not in producer_adresses:
+                producer_adresses.append(sb.producer)
+        producers = db.session.query(SBP).filter(
+            SBP.block_producing_address.in_(producer_adresses))
+    except NoResultFound:
+        app.logger.error(f'cannot find {count} active SBPs')
+        return None
+    return producers
+
+
+def da_get_active_sbp_v3(count):
+    sbp_activity = db.session.query(SBPActivity).order_by(
+        SBPActivity.last_modified.desc()).limit(count).all()
+    producer_adresses = [
+        sbpa.block_producing_address for sbpa in sbp_activity]
+    if len(producer_adresses) == 0:
+        return []
+    producers = db.session.query(SBP).filter(
+        SBP.block_producing_address.in_(producer_adresses))
     return producers
 
 
